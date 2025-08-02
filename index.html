@@ -1,0 +1,1463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minishell Step-by-Step Debugger & Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+            background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
+            color: #ffffff;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(45deg, #00d4ff, #ff006e, #8338ec);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+        
+        @keyframes glow {
+            from { filter: drop-shadow(0 0 10px rgba(0, 212, 255, 0.5)); }
+            to { filter: drop-shadow(0 0 20px rgba(255, 0, 110, 0.5)); }
+        }
+        
+        .terminal {
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            border: 1px solid #333;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+        
+        .terminal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+        
+        .terminal-dots {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        
+        .dot.red { background: #ff5f56; }
+        .dot.yellow { background: #ffbd2e; }
+        .dot.green { background: #27ca3f; }
+        
+        .debug-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .debug-btn {
+            background: linear-gradient(45deg, #8338ec, #00d4ff);
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 12px;
+            transition: all 0.3s ease;
+        }
+        
+        .debug-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 10px rgba(131, 56, 236, 0.4);
+        }
+        
+        .debug-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .step-btn { background: linear-gradient(45deg, #00d4ff, #27ca3f); }
+        .continue-btn { background: linear-gradient(45deg, #27ca3f, #00d4ff); }
+        .reset-btn { background: linear-gradient(45deg, #ff6b6b, #feca57); }
+        
+        .input-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .prompt {
+            color: #00d4ff;
+            font-weight: bold;
+        }
+        
+        #commandInput {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #ffffff;
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+        }
+        
+        .execute-btn {
+            background: linear-gradient(45deg, #00d4ff, #8338ec);
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: all 0.3s ease;
+        }
+        
+        .execute-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 212, 255, 0.4);
+        }
+        
+        .session-info {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .current-step {
+            color: #00d4ff;
+            font-weight: bold;
+        }
+        
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+        
+        .visualization-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .stage {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .stage.active {
+            border-color: #00d4ff;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+            transform: translateY(-3px);
+        }
+        
+        .stage.completed {
+            border-color: #27ca3f;
+            background: rgba(39, 202, 63, 0.1);
+        }
+        
+        .stage.error {
+            border-color: #ff5f56;
+            background: rgba(255, 95, 86, 0.1);
+        }
+        
+        .stage-title {
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            color: #00d4ff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .stage-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+        }
+        
+        .tokenize-icon { background: linear-gradient(45deg, #ff006e, #8338ec); }
+        .validate-icon { background: linear-gradient(45deg, #00d4ff, #27ca3f); }
+        .parse-icon { background: linear-gradient(45deg, #ffbd2e, #ff5f56); }
+        .ast-icon { background: linear-gradient(45deg, #8338ec, #00d4ff); }
+        
+        .step-indicator {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #333;
+        }
+        
+        .step-indicator.active { background: #00d4ff; animation: pulse 1s infinite; }
+        .step-indicator.completed { background: #27ca3f; }
+        .step-indicator.error { background: #ff5f56; }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        .debugger-panel {
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            height: fit-content;
+        }
+        
+        .variable-inspector {
+            margin-bottom: 20px;
+        }
+        
+        .variable-inspector h3 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+        
+        .variable {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px 12px;
+            margin: 5px 0;
+            border-radius: 6px;
+            font-size: 12px;
+            border-left: 3px solid #8338ec;
+        }
+        
+        .variable .name {
+            color: #00d4ff;
+            font-weight: bold;
+        }
+        
+        .variable .type {
+            color: #ff006e;
+            font-size: 10px;
+        }
+        
+        .variable .value {
+            color: #ffffff;
+            margin-top: 2px;
+        }
+        
+        .call-stack {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .call-stack h3 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+            font-size: 1rem;
+        }
+        
+        .function-call {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 8px 12px;
+            margin: 3px 0;
+            border-radius: 6px;
+            font-size: 11px;
+            border-left: 3px solid #00d4ff;
+        }
+        
+        .function-call.active {
+            background: rgba(0, 212, 255, 0.2);
+            border-left-color: #00d4ff;
+        }
+        
+        .func-name {
+            color: #00d4ff;
+            font-weight: bold;
+        }
+        
+        .func-args {
+            color: #8338ec;
+            font-size: 10px;
+        }
+        
+        .func-result {
+            color: #27ca3f;
+            font-size: 10px;
+            margin-top: 2px;
+        }
+        
+        .tokens-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+        
+        .token {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+            animation: slideIn 0.3s ease;
+            border: 1px solid transparent;
+        }
+        
+        .token.highlighted {
+            border-color: #ffbd2e;
+            box-shadow: 0 0 10px rgba(255, 189, 46, 0.5);
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        
+        .token-word { background: linear-gradient(45deg, #00d4ff, #0099cc); color: white; }
+        .token-pipe { background: linear-gradient(45deg, #ff006e, #cc005a); color: white; }
+        .token-redirect { background: linear-gradient(45deg, #8338ec, #6a2cb8); color: white; }
+        .token-heredoc { background: linear-gradient(45deg, #ffbd2e, #e6a826); color: black; }
+        
+        .validation-result {
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .valid {
+            background: linear-gradient(45deg, rgba(39, 202, 63, 0.2), rgba(0, 212, 255, 0.2));
+            border: 1px solid #27ca3f;
+            color: #27ca3f;
+        }
+        
+        .invalid {
+            background: linear-gradient(45deg, rgba(255, 95, 86, 0.2), rgba(255, 0, 110, 0.2));
+            border: 1px solid #ff5f56;
+            color: #ff5f56;
+        }
+        
+        .ast-container {
+            grid-column: 1 / -1;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 15px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            margin-top: 20px;
+        }
+        
+        .ast-tree {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 200px;
+            position: relative;
+        }
+        
+        .ast-node {
+            background: linear-gradient(45deg, #8338ec, #00d4ff);
+            color: white;
+            padding: 10px 16px;
+            border-radius: 20px;
+            margin: 8px;
+            font-weight: bold;
+            position: relative;
+            animation: fadeInUp 0.5s ease;
+            box-shadow: 0 4px 12px rgba(131, 56, 236, 0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 11px;
+        }
+        
+        .ast-node:hover {
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 6px 20px rgba(131, 56, 236, 0.5);
+        }
+        
+        .ast-node.highlighted {
+            border: 2px solid #ffbd2e;
+            box-shadow: 0 0 15px rgba(255, 189, 46, 0.6);
+        }
+        
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .ast-command { background: linear-gradient(45deg, #00d4ff, #27ca3f); }
+        .ast-pipe { background: linear-gradient(45deg, #ff006e, #8338ec); }
+        .ast-redirect { background: linear-gradient(45deg, #ffbd2e, #ff5f56); }
+        
+        .ast-children {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 15px;
+        }
+        
+        .examples {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .examples h3 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+        
+        .example-commands {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 8px;
+        }
+        
+        .example-cmd {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+            font-size: 12px;
+        }
+        
+        .example-cmd:hover {
+            background: rgba(0, 212, 255, 0.1);
+            border-color: #00d4ff;
+            transform: translateY(-1px);
+        }
+        
+        .memory-inspector {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+        }
+        
+        .memory-block {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 6px 10px;
+            margin: 3px 0;
+            border-radius: 4px;
+            font-size: 10px;
+            font-family: monospace;
+        }
+        
+        .execution-trace {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        
+        .trace-entry {
+            font-size: 11px;
+            padding: 4px 8px;
+            margin: 2px 0;
+            border-left: 2px solid #8338ec;
+            background: rgba(255, 255, 255, 0.02);
+        }
+        
+        .trace-entry.current {
+            background: rgba(0, 212, 255, 0.1);
+            border-left-color: #00d4ff;
+        }
+        
+        .step-counter {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Minishell Step-by-Step Debugger</h1>
+            <p>Interactive step-by-step visualization of your minishell parsing and execution pipeline</p>
+        </div>
+        
+        <div class="terminal">
+            <div class="terminal-header">
+                <div class="terminal-dots">
+                    <div class="dot red"></div>
+                    <div class="dot yellow"></div>
+                    <div class="dot green"></div>
+                    <span style="margin-left: 10px; font-size: 12px;">minishell debugger v1.0</span>
+                </div>
+                <div class="debug-controls">
+                    <button class="debug-btn step-btn" id="stepBtn" onclick="stepForward()">Step Forward</button>
+                    <button class="debug-btn continue-btn" id="continueBtn" onclick="continueExecution()">Continue</button>
+                    <button class="debug-btn reset-btn" onclick="resetDebugger()">Reset</button>
+                </div>
+            </div>
+            
+            <div class="input-container">
+                <span class="prompt">$</span>
+                <input type="text" id="commandInput" placeholder="Enter a command to debug (e.g., ls -l | grep test > output.txt)" />
+                <button class="execute-btn" onclick="startDebugging()">Start Debug</button>
+            </div>
+            
+            <div class="session-info">
+                <div class="step-counter">Debug Session: <span id="sessionCounter">0</span> | Steps: <span id="stepCounter">0</span></div>
+                <div class="current-step">Current: <span id="currentStepName">Ready to start</span></div>
+            </div>
+        </div>
+        
+        <div class="main-grid">
+            <div class="visualization-grid">
+                <div class="stage" id="tokenizeStage">
+                    <div class="step-indicator" id="tokenizeIndicator"></div>
+                    <div class="stage-title">
+                        <div class="stage-icon tokenize-icon">1</div>
+                        Tokenization
+                    </div>
+                    <p style="font-size: 12px; margin-bottom: 10px;">tokenize.c → Breaking input into tokens</p>
+                    <div class="tokens-container" id="tokensContainer">
+                        <div class="empty-state">Ready to tokenize</div>
+                    </div>
+                </div>
+                
+                <div class="stage" id="validateStage">
+                    <div class="step-indicator" id="validateIndicator"></div>
+                    <div class="stage-title">
+                        <div class="stage-icon validate-icon">2</div>
+                        Syntax Validation
+                    </div>
+                    <p style="font-size: 12px; margin-bottom: 10px;">syntax_validation.c → Checking syntax</p>
+                    <div id="validationResult">
+                        <div class="empty-state">Ready to validate</div>
+                    </div>
+                </div>
+                
+                <div class="stage" id="parseStage">
+                    <div class="step-indicator" id="parseIndicator"></div>
+                    <div class="stage-title">
+                        <div class="stage-icon parse-icon">3</div>
+                        Pipeline Parsing
+                    </div>
+                    <p style="font-size: 12px; margin-bottom: 10px;">parse_pipeline.c → Building structure</p>
+                    <div id="parseResult">
+                        <div class="empty-state">Ready to parse</div>
+                    </div>
+                </div>
+                
+                <div class="stage" id="astStage">
+                    <div class="step-indicator" id="astIndicator"></div>
+                    <div class="stage-title">
+                        <div class="stage-icon ast-icon">4</div>
+                        AST Generation
+                    </div>
+                    <p style="font-size: 12px; margin-bottom: 10px;">execute_ast.c → Creating AST</p>
+                    <div id="astPreview">
+                        <div class="empty-state">Ready to build AST</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="debugger-panel">
+                <div class="variable-inspector">
+                    <h3>📊 Variables</h3>
+                    <div id="variablesList">
+                        <div class="empty-state">No variables yet</div>
+                    </div>
+                </div>
+                
+                <div class="call-stack">
+                    <h3>📞 Call Stack</h3>
+                    <div id="callStackList">
+                        <div class="empty-state">No function calls yet</div>
+                    </div>
+                </div>
+                
+                <div class="memory-inspector">
+                    <h3>🧠 Memory</h3>
+                    <div id="memoryBlocks">
+                        <div class="empty-state">No allocations yet</div>
+                    </div>
+                </div>
+                
+                <div class="execution-trace">
+                    <h3>🔄 Execution Trace</h3>
+                    <div id="traceList">
+                        <div class="empty-state">No execution steps yet</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="ast-container">
+            <div class="stage-title">
+                <div class="stage-icon ast-icon">🌳</div>
+                Complete AST Visualization
+            </div>
+            <div class="ast-tree" id="astTree">
+                <div class="empty-state">Debug a command to see the complete AST structure</div>
+            </div>
+        </div>
+        
+        <div class="examples">
+            <h3>💡 Example commands to debug:</h3>
+            <div class="example-commands">
+                <div class="example-cmd" onclick="tryExample('ls -l')">ls -l</div>
+                <div class="example-cmd" onclick="tryExample('cat file.txt | grep hello')">cat file.txt | grep hello</div>
+                <div class="example-cmd" onclick="tryExample('echo hello > output.txt')">echo hello > output.txt</div>
+                <div class="example-cmd" onclick="tryExample('cat << EOF')">cat << EOF</div>
+                <div class="example-cmd" onclick="tryExample('ls | wc -l | cat')">ls | wc -l | cat</div>
+                <div class="example-cmd" onclick="tryExample('grep pattern < input.txt > output.txt')">grep pattern < input.txt > output.txt</div>
+                <div class="example-cmd" onclick="tryExample('export VAR=value')">export VAR=value</div>
+                <div class="example-cmd" onclick="tryExample('cd /home && pwd')">cd /home && pwd</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Debug session management
+        let debugSession = {
+            sessionId: 0,
+            stepCount: 0,
+            currentStep: 0,
+            steps: [],
+            tokens: [],
+            ast: null,
+            variables: {},
+            callStack: [],
+            memoryBlocks: [],
+            executionTrace: [],
+            isRunning: false,
+            isPaused: false
+        };
+
+        // Token types from your minishell.h
+        const TOKEN_TYPES = {
+            WORD: 'TOKEN_WORD',
+            PIPE: 'TOKEN_PIPE',
+            REDIR_IN: 'TOKEN_REDIR_IN',
+            REDIR_OUT: 'TOKEN_REDIR_OUT',
+            REDIR_APPEND: 'TOKEN_REDIR_APPEND',
+            HEREDOC: 'TOKEN_HEREDOC'
+        };
+
+        // Debugging steps that mirror your actual code flow
+        const DEBUG_STEPS = [
+            { id: 'start', name: 'handle_line', description: 'Starting command processing' },
+            { id: 'tokenize_init', name: 'tokenize', description: 'Initializing tokenization' },
+            { id: 'tokenize_loop', name: 'tokenize_operators/tokenize_word', description: 'Processing each character' },
+            { id: 'tokenize_complete', name: 'tokenize', description: 'Tokenization complete' },
+            { id: 'validate_init', name: 'validate_syntax', description: 'Starting syntax validation' },
+            { id: 'validate_pipes', name: 'validate_syntax', description: 'Checking pipe syntax' },
+            { id: 'validate_redirections', name: 'validate_syntax', description: 'Checking redirection syntax' },
+            { id: 'validate_complete', name: 'validate_syntax', description: 'Validation complete' },
+            { id: 'heredoc_check', name: 'heredoc_check', description: 'Processing heredocs' },
+            { id: 'parse_init', name: 'parse_pipeline', description: 'Starting pipeline parsing' },
+            { id: 'parse_command', name: 'parse_command_with_redirections', description: 'Parsing individual commands' },
+            { id: 'parse_redirections', name: 'parse_single_redirection', description: 'Processing redirections' },
+            { id: 'ast_build', name: 'create_pipe_node/init_command_node', description: 'Building AST nodes' },
+            { id: 'parse_complete', name: 'parse_pipeline', description: 'Pipeline parsing complete' },
+            { id: 'execute_prepare', name: 'exec_ast', description: 'Preparing for execution' },
+            { id: 'execute_complete', name: 'exec_ast', description: 'Execution complete' }
+        ];
+
+        function updateDebugUI() {
+            document.getElementById('sessionCounter').textContent = debugSession.sessionId;
+            document.getElementById('stepCounter').textContent = debugSession.stepCount;
+            
+            if (debugSession.currentStep < debugSession.steps.length) {
+                const currentStep = debugSession.steps[debugSession.currentStep];
+                document.getElementById('currentStepName').textContent = currentStep.name + ': ' + currentStep.description;
+            }
+            
+            // Update step indicators
+            updateStepIndicators();
+            updateVariablesDisplay();
+            updateCallStackDisplay();
+            updateMemoryDisplay();
+            updateTraceDisplay();
+        }
+
+        function updateStepIndicators() {
+            const indicators = ['tokenizeIndicator', 'validateIndicator', 'parseIndicator', 'astIndicator'];
+            const stages = ['tokenizeStage', 'validateStage', 'parseStage', 'astStage'];
+            
+            indicators.forEach((id, index) => {
+                const indicator = document.getElementById(id);
+                const stage = document.getElementById(stages[index]);
+                
+                indicator.className = 'step-indicator';
+                stage.className = 'stage';
+                
+                if (debugSession.currentStep <= index * 4) {
+                    // Not reached yet
+                } else if (debugSession.currentStep <= (index + 1) * 4) {
+                    // Currently active
+                    indicator.classList.add('active');
+                    stage.classList.add('active');
+                } else {
+                    // Completed
+                    indicator.classList.add('completed');
+                    stage.classList.add('completed');
+                }
+            });
+        }
+
+        function updateVariablesDisplay() {
+            const container = document.getElementById('variablesList');
+            
+            if (Object.keys(debugSession.variables).length === 0) {
+                container.innerHTML = '<div class="empty-state">No variables yet</div>';
+                return;
+            }
+            
+            container.innerHTML = Object.entries(debugSession.variables).map(([name, data]) => `
+                <div class="variable">
+                    <div class="name">${name}</div>
+                    <div class="type">${data.type}</div>
+                    <div class="value">${JSON.stringify(data.value)}</div>
+                </div>
+            `).join('');
+        }
+
+        function updateCallStackDisplay() {
+            const container = document.getElementById('callStackList');
+            
+            if (debugSession.callStack.length === 0) {
+                container.innerHTML = '<div class="empty-state">No function calls yet</div>';
+                return;
+            }
+            
+            container.innerHTML = debugSession.callStack.slice(-10).map((call, index) => `
+                <div class="function-call ${index === debugSession.callStack.length - 1 ? 'active' : ''}">
+                    <span class="func-name">${call.function}</span>
+                    <div class="func-args">${call.args || ''}</div>
+                    ${call.result ? `<div class="func-result">→ ${call.result}</div>` : ''}
+                </div>
+            `).join('');
+        }
+
+        function updateMemoryDisplay() {
+            const container = document.getElementById('memoryBlocks');
+            
+            if (debugSession.memoryBlocks.length === 0) {
+                container.innerHTML = '<div class="empty-state">No allocations yet</div>';
+                return;
+            }
+            
+            container.innerHTML = debugSession.memoryBlocks.slice(-5).map(block => `
+                <div class="memory-block">
+                    ${block.type}: ${block.size} bytes @ ${block.address}
+                </div>
+            `).join('');
+        }
+
+        function updateTraceDisplay() {
+            const container = document.getElementById('traceList');
+            
+            if (debugSession.executionTrace.length === 0) {
+                container.innerHTML = '<div class="empty-state">No execution steps yet</div>';
+                return;
+            }
+            
+            container.innerHTML = debugSession.executionTrace.slice(-8).map((trace, index) => `
+                <div class="trace-entry ${index === debugSession.executionTrace.length - 1 ? 'current' : ''}">
+                    ${trace.step}: ${trace.description}
+                </div>
+            `).join('');
+            
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function addToCallStack(functionName, args = '', result = '') {
+            debugSession.callStack.push({
+                function: functionName,
+                args: args,
+                result: result,
+                step: debugSession.stepCount
+            });
+        }
+
+        function setVariable(name, type, value) {
+            debugSession.variables[name] = { type, value };
+        }
+
+        function addMemoryBlock(type, size, address) {
+            debugSession.memoryBlocks.push({ type, size, address: address || `0x${Math.random().toString(16).substr(2, 8)}` });
+        }
+
+        function addTraceEntry(step, description) {
+            debugSession.executionTrace.push({ step, description });
+        }
+
+        // Tokenization implementation (matches your tokenize.c)
+        function tokenize(input) {
+            const tokens = [];
+            let i = 0;
+            
+            addToCallStack('tokenize', `input: "${input}"`);
+            setVariable('input', 'char*', input);
+            setVariable('tokens', 't_token*', 'NULL');
+            setVariable('i', 'int', 0);
+            addMemoryBlock('t_token list', 0, '0x00000000');
+            
+            while (i < input.length) {
+                // Skip whitespace
+                while (i < input.length && /\s/.test(input[i])) {
+                    i++;
+                }
+                
+                if (i >= input.length) break;
+                
+                setVariable('i', 'int', i);
+                
+                // Check for operators
+                if (input[i] === '<' || input[i] === '>' || input[i] === '|') {
+                    addToCallStack('tokenize_operators', `char: '${input[i]}' at pos ${i}`);
+                    
+                    if (i + 1 < input.length && (input[i + 1] === '<' || input[i + 1] === '>')) {
+                        if (input[i] === '<' && input[i + 1] === '<') {
+                            tokens.push({ type: TOKEN_TYPES.HEREDOC, value: '<<' });
+                            addToCallStack('create_token', 'TOKEN_HEREDOC, "<<"', 'new token created');
+                        } else if (input[i] === '>' && input[i + 1] === '>') {
+                            tokens.push({ type: TOKEN_TYPES.REDIR_APPEND, value: '>>' });
+                            addToCallStack('create_token', 'TOKEN_REDIR_APPEND, ">>"', 'new token created');
+                        }
+                        i += 2;
+                    } else {
+                        if (input[i] === '<') {
+                            tokens.push({ type: TOKEN_TYPES.REDIR_IN, value: '<' });
+                            addToCallStack('create_token', 'TOKEN_REDIR_IN, "<"', 'new token created');
+                        } else if (input[i] === '>') {
+                            tokens.push({ type: TOKEN_TYPES.REDIR_OUT, value: '>' });
+                            addToCallStack('create_token', 'TOKEN_REDIR_OUT, ">"', 'new token created');
+                        } else if (input[i] === '|') {
+                            tokens.push({ type: TOKEN_TYPES.PIPE, value: '|' });
+                            addToCallStack('create_token', 'TOKEN_PIPE, "|"', 'new token created');
+                        }
+                        i++;
+                    }
+                    addToCallStack('add_token', `token added. Total: ${tokens.length}`);
+                } else {
+                    // Process word token
+                    const start = i;
+                    let inSingleQuote = false;
+                    let inDoubleQuote = false;
+                    
+                    addToCallStack('tokenize_word', `starting at pos ${start}`);
+                    setVariable('start', 'int', start);
+                    setVariable('in_sq', 'int', 0);
+                    setVariable('in_dq', 'int', 0);
+                    
+                    while (i < input.length) {
+                        if (input[i] === '\'' && !inDoubleQuote) {
+                            inSingleQuote = !inSingleQuote;
+                            setVariable('in_sq', 'int', inSingleQuote ? 1 : 0);
+                        } else if (input[i] === '"' && !inSingleQuote) {
+                            inDoubleQuote = !inDoubleQuote;
+                            setVariable('in_dq', 'int', inDoubleQuote ? 1 : 0);
+                        }
+                        
+                        if (!inSingleQuote && !inDoubleQuote && (/\s/.test(input[i]) || /[<>|]/.test(input[i]))) {
+                            break;
+                        }
+                        i++;
+                    }
+                    
+                    if (i > start) {
+                        const word = input.substring(start, i);
+                        tokens.push({ type: TOKEN_TYPES.WORD, value: word });
+                        addToCallStack('create_token', `TOKEN_WORD, "${word}"`, 'new token created');
+                        addToCallStack('add_token', `token added. Total: ${tokens.length}`);
+                        addMemoryBlock('token value', word.length + 1, null);
+                    }
+                }
+                
+                setVariable('i', 'int', i);
+            }
+            
+            setVariable('tokens', 't_token*', `${tokens.length} tokens`);
+            addToCallStack('tokenize', '', `${tokens.length} tokens created`);
+            return tokens;
+        }
+
+        function validateSyntax(tokens) {
+            addToCallStack('validate_syntax', `tokens: ${tokens.length}`);
+            addTraceEntry('validate_syntax', `Starting validation of ${tokens.length} tokens`);
+            
+            if (!tokens.length) {
+                addToCallStack('validate_syntax', '', 'empty input - valid');
+                return { valid: true, message: "Empty input" };
+            }
+            
+            // Check if starts with pipe
+            if (tokens[0].type === TOKEN_TYPES.PIPE) {
+                addToCallStack('print_syntax_error', 'first token is pipe');
+                addTraceEntry('syntax_error', 'Command cannot start with pipe');
+                return { valid: false, message: "syntax error near unexpected token '|'" };
+            }
+            
+            for (let i = 0; i < tokens.length; i++) {
+                const current = tokens[i];
+                const next = tokens[i + 1];
+                
+                addTraceEntry('validate_syntax', `Checking token ${i}: ${current.type}`);
+                
+                // Check pipe validation
+                if (current.type === TOKEN_TYPES.PIPE) {
+                    addToCallStack('validate_syntax', 'checking pipe token');
+                    
+                    if (!next) {
+                        addToCallStack('print_syntax_error', 'pipe at end');
+                        addTraceEntry('syntax_error', 'Pipe cannot be at end of command');
+                        return { valid: false, message: "syntax error near unexpected token 'newline'" };
+                    }
+                    if (next.type === TOKEN_TYPES.PIPE) {
+                        addToCallStack('print_syntax_error', 'double pipe');
+                        addTraceEntry('syntax_error', 'Double pipe not allowed');
+                        return { valid: false, message: `syntax error near unexpected token '${next.value}'` };
+                    }
+                }
+                
+                // Check redirection validation
+                if (isRedirectionToken(current.type)) {
+                    addToCallStack('is_redirection_token', `${current.value}`, 'true');
+                    
+                    if (!next) {
+                        addToCallStack('print_syntax_error', 'redirection without target');
+                        addTraceEntry('syntax_error', 'Redirection needs a target file');
+                        return { valid: false, message: "syntax error near unexpected token 'newline'" };
+                    }
+                    if (next.type !== TOKEN_TYPES.WORD) {
+                        addToCallStack('print_syntax_error', 'redirection target not word');
+                        addTraceEntry('syntax_error', 'Redirection target must be a filename');
+                        return { valid: false, message: `syntax error near unexpected token '${next.value}'` };
+                    }
+                }
+            }
+            
+            addToCallStack('validate_syntax', '', 'syntax valid');
+            addTraceEntry('validate_syntax', 'All syntax checks passed');
+            return { valid: true, message: "Syntax is valid!" };
+        }
+
+        function isRedirectionToken(type) {
+            return [TOKEN_TYPES.REDIR_IN, TOKEN_TYPES.REDIR_OUT, 
+                   TOKEN_TYPES.REDIR_APPEND, TOKEN_TYPES.HEREDOC].includes(type);
+        }
+
+        function buildAST(tokens) {
+            if (!tokens.length) return null;
+            
+            addToCallStack('parse_pipeline', `${tokens.length} tokens`);
+            addTraceEntry('parse_pipeline', 'Starting pipeline parsing');
+            setVariable('tokens', 't_token*', `${tokens.length} tokens`);
+            
+            return parsePipeline(tokens, 0).node;
+        }
+
+        function parsePipeline(tokens, index) {
+            addToCallStack('parse_pipeline', `from index ${index}`);
+            
+            // Parse first command
+            addToCallStack('parse_command_with_redirections', 'parsing left command');
+            let result = parseCommand(tokens, index);
+            let left = result.node;
+            index = result.nextIndex;
+            
+            // Handle pipes
+            while (index < tokens.length && tokens[index].type === TOKEN_TYPES.PIPE) {
+                addToCallStack('parse_pipeline', 'found pipe - creating pipe node');
+                addTraceEntry('parse_pipeline', `Creating pipe between commands`);
+                
+                index++; // skip pipe
+                addToCallStack('parse_command_with_redirections', 'parsing right command');
+                result = parseCommand(tokens, index);
+                const right = result.node;
+                index = result.nextIndex;
+                
+                // Create pipe node
+                addToCallStack('create_pipe_node', `left: ${getNodeDescription(left)}, right: ${getNodeDescription(right)}`);
+                addMemoryBlock('t_ast pipe node', 64, null);
+                left = {
+                    type: 'NODE_PIPE',
+                    left: left,
+                    right: right,
+                    operator: '|'
+                };
+            }
+            
+            addToCallStack('parse_pipeline', '', `pipeline complete`);
+            addTraceEntry('parse_pipeline', 'Pipeline parsing completed');
+            return { node: left, nextIndex: index };
+        }
+
+        function parseCommand(tokens, index) {
+            addToCallStack('parse_command_with_redirections', `from index ${index}`);
+            
+            const argCount = countCommandArgs(tokens, index);
+            addToCallStack('count_command_args', '', `${argCount} arguments`);
+            
+            const args = [];
+            const redirections = [];
+            
+            addToCallStack('init_command_node', `argc: ${argCount}`);
+            addMemoryBlock('t_ast command node', 48, null);
+            if (argCount > 0) {
+                addMemoryBlock('args array', argCount * 8, null);
+            }
+            
+            let i = 0;
+            while (index < tokens.length && tokens[index].type !== TOKEN_TYPES.PIPE) {
+                const token = tokens[index];
+                
+                if (isRedirectionToken(token.type)) {
+                    if (index + 1 < tokens.length) {
+                        const target = tokens[index + 1].value;
+                        addToCallStack('create_redirection', `${token.type} -> ${target}`);
+                        addToCallStack('add_redirection', `total: ${redirections.length + 1}`);
+                        
+                        redirections.push({
+                            type: token.type,
+                            target: target
+                        });
+                        
+                        addMemoryBlock('t_redir', 32, null);
+                        index += 2;
+                    } else {
+                        index++;
+                    }
+                } else if (token.type === TOKEN_TYPES.WORD) {
+                    args.push(token.value);
+                    addMemoryBlock('arg string', token.value.length + 1, null);
+                    i++;
+                    index++;
+                } else {
+                    index++;
+                }
+            }
+            
+            const commandNode = {
+                type: 'NODE_COMMAND',
+                args: args,
+                redirections: redirections
+            };
+            
+            addToCallStack('parse_command_with_redirections', '', `${args.length} args, ${redirections.length} redirections`);
+            addTraceEntry('parse_command', `Parsed command: ${args.join(' ')}`);
+            
+            return {
+                node: commandNode,
+                nextIndex: index
+            };
+        }
+
+        function countCommandArgs(tokens, startIndex) {
+            let count = 0;
+            let index = startIndex;
+            
+            while (index < tokens.length && tokens[index].type !== TOKEN_TYPES.PIPE) {
+                if (isRedirectionToken(tokens[index].type)) {
+                    index += 2;
+                } else if (tokens[index].type === TOKEN_TYPES.WORD) {
+                    count++;
+                    index++;
+                } else {
+                    index++;
+                }
+            }
+            
+            return count;
+        }
+
+        function getNodeDescription(node) {
+            if (!node) return 'null';
+            if (node.type === 'NODE_COMMAND') {
+                return `CMD(${node.args.join(' ')})`;
+            } else if (node.type === 'NODE_PIPE') {
+                return `PIPE`;
+            }
+            return node.type;
+        }
+
+        // Debug control functions
+        function startDebugging() {
+            const input = document.getElementById('commandInput').value.trim();
+            if (!input) return;
+            
+            resetDebugger();
+            debugSession.sessionId++;
+            debugSession.isRunning = true;
+            
+            addTraceEntry('handle_line', `Starting debug session for: "${input}"`);
+            
+            // Setup debug steps
+            debugSession.steps = DEBUG_STEPS.map(step => ({ ...step }));
+            
+            // Start with tokenization
+            debugSession.tokens = tokenize(input);
+            const validation = validateSyntax(debugSession.tokens);
+            
+            if (validation.valid) {
+                debugSession.ast = buildAST(debugSession.tokens);
+            }
+            
+            // Reset to first step for stepping
+            debugSession.currentStep = 0;
+            debugSession.stepCount = 0;
+            
+            updateDebugUI();
+            renderTokens(debugSession.tokens);
+            renderValidation(validation);
+            renderParseResult(debugSession.tokens, validation);
+            renderASTPreview(debugSession.ast);
+            renderAST(debugSession.ast);
+            
+            document.getElementById('stepBtn').disabled = false;
+            document.getElementById('continueBtn').disabled = false;
+        }
+
+        function stepForward() {
+            if (debugSession.currentStep >= debugSession.steps.length - 1) return;
+            
+            debugSession.currentStep++;
+            debugSession.stepCount++;
+            
+            const currentStep = debugSession.steps[debugSession.currentStep];
+            addTraceEntry(currentStep.name, currentStep.description);
+            
+            // Highlight current processing stage
+            highlightCurrentStage();
+            
+            updateDebugUI();
+            
+            if (debugSession.currentStep >= debugSession.steps.length - 1) {
+                document.getElementById('stepBtn').disabled = true;
+                document.getElementById('continueBtn').disabled = true;
+                addTraceEntry('complete', 'Debug session completed');
+            }
+        }
+
+        function continueExecution() {
+            while (debugSession.currentStep < debugSession.steps.length - 1) {
+                setTimeout(() => stepForward(), debugSession.currentStep * 200);
+            }
+        }
+
+        function resetDebugger() {
+            debugSession = {
+                sessionId: debugSession.sessionId,
+                stepCount: 0,
+                currentStep: 0,
+                steps: [],
+                tokens: [],
+                ast: null,
+                variables: {},
+                callStack: [],
+                memoryBlocks: [],
+                executionTrace: [],
+                isRunning: false,
+                isPaused: false
+            };
+            
+            // Reset UI
+            document.getElementById('tokensContainer').innerHTML = '<div class="empty-state">Ready to tokenize</div>';
+            document.getElementById('validationResult').innerHTML = '<div class="empty-state">Ready to validate</div>';
+            document.getElementById('parseResult').innerHTML = '<div class="empty-state">Ready to parse</div>';
+            document.getElementById('astPreview').innerHTML = '<div class="empty-state">Ready to build AST</div>';
+            document.getElementById('astTree').innerHTML = '<div class="empty-state">Debug a command to see the complete AST structure</div>';
+            
+            document.getElementById('stepBtn').disabled = true;
+            document.getElementById('continueBtn').disabled = true;
+            
+            updateDebugUI();
+        }
+
+        function highlightCurrentStage() {
+            // Remove all highlights
+            document.querySelectorAll('.token').forEach(el => el.classList.remove('highlighted'));
+            document.querySelectorAll('.ast-node').forEach(el => el.classList.remove('highlighted'));
+            
+            const step = debugSession.steps[debugSession.currentStep];
+            
+            // Highlight based on current step
+            if (step.id.includes('tokenize')) {
+                // Highlight tokens being processed
+                const tokens = document.querySelectorAll('.token');
+                tokens.forEach((token, index) => {
+                    if (index < debugSession.currentStep - 1) {
+                        token.classList.add('highlighted');
+                    }
+                });
+            } else if (step.id.includes('parse') || step.id.includes('ast')) {
+                // Highlight AST nodes
+                document.querySelectorAll('.ast-node').forEach(el => {
+                    el.classList.add('highlighted');
+                });
+            }
+        }
+
+        // Rendering functions (same as before but with debug highlighting)
+        function renderTokens(tokens) {
+            const container = document.getElementById('tokensContainer');
+            container.innerHTML = '';
+            
+            if (!tokens.length) {
+                container.innerHTML = '<div class="empty-state">No tokens to display</div>';
+                return;
+            }
+            
+            tokens.forEach((token, index) => {
+                setTimeout(() => {
+                    const tokenEl = document.createElement('div');
+                    tokenEl.className = 'token';
+                    tokenEl.textContent = `${token.value}`;
+                    tokenEl.title = `${token.type} - Index: ${index}`;
+                    
+                    if (token.type === TOKEN_TYPES.WORD) tokenEl.classList.add('token-word');
+                    else if (token.type === TOKEN_TYPES.PIPE) tokenEl.classList.add('token-pipe');
+                    else if (isRedirectionToken(token.type)) tokenEl.classList.add('token-redirect');
+                    
+                    container.appendChild(tokenEl);
+                }, index * 50);
+            });
+        }
+
+        function renderValidation(validation) {
+            const container = document.getElementById('validationResult');
+            container.innerHTML = `
+                <div class="validation-result ${validation.valid ? 'valid' : 'invalid'}">
+                    ${validation.valid ? '✅' : '❌'} ${validation.message}
+                </div>
+            `;
+        }
+
+        function renderParseResult(tokens, validation) {
+            const container = document.getElementById('parseResult');
+            
+            if (!validation.valid) {
+                container.innerHTML = '<div class="empty-state">Fix syntax errors first</div>';
+                return;
+            }
+            
+            const commands = [];
+            let currentCmd = [];
+            
+            tokens.forEach(token => {
+                if (token.type === TOKEN_TYPES.PIPE) {
+                    if (currentCmd.length) {
+                        commands.push(currentCmd);
+                        currentCmd = [];
+                    }
+                } else if (token.type === TOKEN_TYPES.WORD) {
+                    currentCmd.push(token.value);
+                }
+            });
+            
+            if (currentCmd.length) {
+                commands.push(currentCmd);
+            }
+            
+            container.innerHTML = `
+                <div style="font-size: 11px;">
+                    <strong>Commands found:</strong> ${commands.length}<br>
+                    ${commands.map((cmd, i) => `
+                        <div style="margin: 4px 0; padding: 4px; background: rgba(0,212,255,0.1); border-radius: 4px; border-left: 2px solid #00d4ff;">
+                            Cmd ${i+1}: ${cmd.join(' ')}
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function renderASTPreview(ast) {
+            const container = document.getElementById('astPreview');
+            
+            if (!ast) {
+                container.innerHTML = '<div class="empty-state">No AST generated</div>';
+                return;
+            }
+            
+            container.innerHTML = `
+                <div style="font-size: 11px;">
+                    <strong>Root Node:</strong> ${ast.type}<br>
+                    <strong>Structure:</strong><br>
+                    <div style="font-family: monospace; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; margin-top: 5px;">
+                        ${getASTStructure(ast)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function getASTStructure(node, depth = 0) {
+            const indent = '  '.repeat(depth);
+            if (node.type === 'NODE_COMMAND') {
+                const cmd = node.args.join(' ') || 'empty';
+                const redirs = node.redirections.length ? ` +${node.redirections.length} redirections` : '';
+                return `${indent}Command: ${cmd}${redirs}`;
+            } else if (node.type === 'NODE_PIPE') {
+                return `${indent}Pipe:\n${getASTStructure(node.left, depth + 1)}\n${getASTStructure(node.right, depth + 1)}`;
+            }
+            return `${indent}${node.type}`;
+        }
+
+        function renderAST(ast) {
+            const container = document.getElementById('astTree');
+            container.innerHTML = '';
+            
+            if (!ast) {
+                container.innerHTML = '<div class="empty-state">No AST to display</div>';
+                return;
+            }
+            
+            const astElement = createASTNode(ast);
+            container.appendChild(astElement);
+        }
+
+        function createASTNode(node) {
+            const nodeEl = document.createElement('div');
+            nodeEl.style.textAlign = 'center';
+            
+            const nodeContent = document.createElement('div');
+            nodeContent.className = `ast-node ${node.type === 'NODE_COMMAND' ? 'ast-command' : 'ast-pipe'}`;
+            
+            if (node.type === 'NODE_COMMAND') {
+                nodeContent.innerHTML = `
+                    <div><strong>COMMAND</strong></div>
+                    <div style="font-size: 10px; margin-top: 3px;">${node.args.join(' ') || 'empty'}</div>
+                    ${node.redirections.length ? `<div style="font-size: 9px; color: #ffbd2e;">+${node.redirections.length} redirections</div>` : ''}
+                `;
+            } else if (node.type === 'NODE_PIPE') {
+                nodeContent.innerHTML = '<div><strong>PIPE |</strong></div>';
+            }
+            
+            nodeContent.onclick = () => {
+                // Show detailed info about this node
+                alert(`Node Type: ${node.type}\nArgs: ${JSON.stringify(node.args)}\nRedirections: ${JSON.stringify(node.redirections)}`);
+            };
+            
+            nodeEl.appendChild(nodeContent);
+            
+            if (node.left || node.right) {
+                const childrenEl = document.createElement('div');
+                childrenEl.className = 'ast-children';
+                childrenEl.style.marginTop = '15px';
+                
+                if (node.left) {
+                    childrenEl.appendChild(createASTNode(node.left));
+                }
+                if (node.right) {
+                    childrenEl.appendChild(createASTNode(node.right));
+                }
+                
+                nodeEl.appendChild(childrenEl);
+            }
+            
+            return nodeEl;
+        }
+
+        function tryExample(command) {
+            document.getElementById('commandInput').value = command;
+            startDebugging();
+        }
+
+        // Keyboard shortcuts
+        document.getElementById('commandInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                startDebugging();
+            }
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'F10' || (e.key === 'n' && e.ctrlKey)) {
+                e.preventDefault();
+                stepForward();
+            } else if (e.key === 'F5' || (e.key === 'r' && e.ctrlKey)) {
+                e.preventDefault();
+                continueExecution();
+            } else if (e.key === 'F9' || (e.key === 'd' && e.ctrlKey)) {
+                e.preventDefault();
+                resetDebugger();
+            }
+        });
+
+        // Initialize
+        window.addEventListener('load', () => {
+            resetDebugger();
+            
+            // Show keyboard shortcuts in console
+            console.log('🔍 Minishell Debugger Shortcuts:');
+            console.log('F10 or Ctrl+N: Step Forward');
+            console.log('F5 or Ctrl+R: Continue');
+            console.log('F9 or Ctrl+D: Reset');
+            
+            // Auto-load example after a delay
+            setTimeout(() => {
+                tryExample('ls -l | grep test > output.txt');
+            }, 2000);
+        });
+    </script>
+</body>
+</html>
